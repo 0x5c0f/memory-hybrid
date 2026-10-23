@@ -1,0 +1,16 @@
+# 运行时数据（默认在 ~/.pi/agent/memory/，不在本仓库内）
+# 如果哪天把数据目录指到仓库里，下面这些不该进版本库
+index.db
+index.db-shm
+index.db-wal
+archive/
+backup/
+config.json
+
+# 依赖与构建产物（本项目当前零依赖，纯预防）
+node_modules/
+dist/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

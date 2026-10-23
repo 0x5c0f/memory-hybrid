@@ -1,0 +1,133 @@
+// memory-hybrid 配置项参考（自动生成，勿手改）
+//  生成：node ops/export-config-doc.js     校验：node ops/export-config-doc.js --check
+//  注意：本文件只是「清单」；真正生效的配置文件是 <memory>/config.json
+//  可命令修改：/mem config set <key> <value>
+//  带 ★ 的项命令改不了，必须直接编辑 config.json 后 /reload
+{
+  "_schema": 1,
+
+  // ── mode ────────────────────────────────────────────────────────
+  // 写入模式。auto=规则型暂存+阈值晋升；manual=只有用户明说（记一下/记住/别再）才写入
+  // type=enum  values=auto|manual
+  // 生效点：决定 memory_write 与候选晋升的行为
+  // 示例："auto"
+  "mode": "auto",
+
+  // ── candidateRules ──────────────────────────────────────────────
+  // auto 模式下是否用正则捕获候选（纯本地，0 次模型调用）
+  // type=boolean
+  // 生效点：关掉后 auto 模式不再抓候选
+  // 示例：true
+  "candidateRules": true,
+
+  // ── promoteThreshold ────────────────────────────────────────────
+  // 候选晋升阈值 0~1，越高越保守；captureRules 里的 weight 低于它就不会自动晋升
+  // type=number  range=0 ~ 1
+  // 生效点：大于等于该分数的候选才会自动晋升
+  // 示例：0.6
+  "promoteThreshold": 0.6,
+
+  // ── injectBudgetChars ───────────────────────────────────────────
+  // L0 注入系统提示的字符上限，越大越费 token（100~4000）
+  // type=integer  range=100 ~ 4000
+  // 生效点：L0 注入系统提示的字符上限，直接决定每轮 token
+  // 示例：600
+  "injectBudgetChars": 600,
+
+  // ── maxInjectItems ──────────────────────────────────────────────
+  // 最多注入多少条 L0（1~200）
+  // type=integer  range=1 ~ 200
+  // 生效点：最多注入多少条 L0
+  // 示例：20
+  "maxInjectItems": 20,
+
+  // ── archiveWrite ────────────────────────────────────────────────
+  // 是否同时把记忆写入 Markdown 归档 archive/YYYY-MM-DD.md
+  // type=boolean
+  // 生效点：关掉后不写 Markdown 归档（不推荐，会丢事实源）
+  // 示例：true
+  "archiveWrite": true,
+
+  // ── ★ ttlDaysByType ───────────────────────────────────────────────
+  // 按类型的自动过期天数，不写=永不过期
+  // type=object<string,integer>
+  // 生效点：按类型自动过期天数；不列出的类型永不过期
+  // 示例：{"event":30,"todo":90,"case":180,"pattern":365}
+  "ttlDaysByType": {
+    "event": 30,
+    "todo": 90,
+    "case": 180,
+    "pattern": 365
+  },
+
+  // ── ★ vector ──────────────────────────────────────────────────────
+  // 向量后端。v1 只支持 none；预留 openai-compatible / local-gguf 等
+  // type=object  shape={ backend: "none" | "sqlite-vec" | "openai-compatible", model?: string }
+  // 生效点：向量后端；v1 仅 none 生效
+  // 示例：{"backend":"none"}
+  "vector": {
+    "backend": "none"
+  },
+
+  // ── ★ captureRules ────────────────────────────────────────────────
+  // 候选捕获规则数组：pattern(正则) / kind(记忆类型) / weight(0~1) / reason(命中原因)
+  // type=array<object>  shape={ pattern: 正则源码, kind: 记忆类型, weight: 0~1, reason: 命中原因 }
+  // 生效点：auto 模式的候选捕获规则；非法正则会被丢弃
+  // 示例：[{"pattern":"以后都|别再","kind":"preference","weight":0.75,"reason":"长期偏好措辞"}]
+  "captureRules": [
+    {
+      "pattern": "以后都|以后统一|统一用|一律用|别再|不要再|下次不要",
+      "kind": "preference",
+      "weight": 0.75,
+      "reason": "长期偏好措辞"
+    },
+    {
+      "pattern": "决定|定下来|就这么定|改成|换成|迁移到|升级到",
+      "kind": "decision",
+      "weight": 0.7,
+      "reason": "决策措辞"
+    },
+    {
+      "pattern": "教训|踩坑|坑是|记住|注意以后|别再犯",
+      "kind": "lesson",
+      "weight": 0.7,
+      "reason": "教训措辞"
+    },
+    {
+      "pattern": "配置|端口|路径|目录|账号|地址|域名",
+      "kind": "entity",
+      "weight": 0.45,
+      "reason": "配置/实体信息"
+    },
+    {
+      "pattern": "待办|todo|下次要|回头要|记得改",
+      "kind": "todo",
+      "weight": 0.5,
+      "reason": "待办措辞"
+    }
+  ],
+
+  // ── ★ triggerPatterns ─────────────────────────────────────────────
+  // manual 模式的放行触发词（正则源码数组，任意一条命中即允许 memory_write）
+  // type=array<string>  shape=正则源码数组
+  // 生效点：manual 模式放行 memory_write 的触发词，命中任一即允许
+  // 示例：["记一下|记下来|记住","别再|以后都"]
+  "triggerPatterns": [
+    "记一下|记下来|记住|记到记忆|存进记忆|存到记忆|写进记忆|帮我记|保存到记忆",
+    "以后都|以后统一|别再|不要再|下次不要"
+  ],
+
+  // ── ★ captureMaxChars ─────────────────────────────────────────────
+  // 候选捕获的最大字符数（默认 800）：长文本多半是任务 prompt 而不是用户口述，超过就不捕获
+  // type=integer  range=100 ~ 8000
+  // 生效点：超过该长度的消息不参与候选捕获（长文本多半是任务 prompt）
+  // 示例：800
+  "captureMaxChars": 800,
+
+  // ── sqliteSync ──────────────────────────────────────────────────
+  // SQLite 落盘策略：normal（默认，WAL 下仍保证崩溃一致，检索快 10 倍）/ full（每次写等 fsync，最严格）
+  // type=enum  values=normal|full
+  // 生效点：SQLite 落盘策略；normal 在 WAL 下仍保证崩溃一致，检索快约 10 倍
+  // 示例："normal"
+  "sqliteSync": "normal"
+}

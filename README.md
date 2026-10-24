@@ -172,12 +172,12 @@ id: 0ad7ea41-…
 |---|---|---|
 | `mode` | `auto`=规则型候选+阈值晋升；`manual`=只有触发词命中才写 | `auto` |
 | `candidateRules` | auto 下是否正则捕获候选（0 次模型调用） | `true` |
-| `promoteThreshold` | 候选晋升阈值 0~1 | `0.6` |
+| `promoteThreshold` | 候选晋升阈值 0~1（权重低于它的候选永不自动晋升） | `0.45` |
 | `injectBudgetChars` | L0 注入字符上限（100~4000） | `600` |
 | `maxInjectItems` | 最多注入条数（1~200） | `20` |
 | `archiveWrite` | 是否写 Markdown 归档 | `true` |
 | `ttlDaysByType` | 按类型过期天数 | event 30 / todo 90 / case 180 / pattern 365 |
-| `captureRules` | 候选规则数组（pattern/kind/weight/reason） | 5 条 |
+| `captureRules` | 候选规则数组（pattern/kind/weight/reason） | 5 条（preference .75 / decision .7 / lesson .7 / entity .5 / todo .5） |
 | `triggerPatterns` | manual 放行触发词（正则数组） | 2 条 |
 | `captureMaxChars` | 候选捕获最大字符数（长文本多半是任务 prompt） | `800` |
 | `sqliteSync` | `normal`（快）/ `full`（每次 fsync） | `normal` |
@@ -236,7 +236,10 @@ db.loadExtension(require('sqlite-vec').getLoadablePath());
 
 ## 写入纪律
 
-- **auto**：`agent_end` 用正则抓候选（0 次模型调用）→ 进 `candidates` → `session_shutdown` 按阈值晋升
+- **auto**：`agent_end` 用正则抓候选（0 次模型调用）→ 进 `candidates` → `session_shutdown` 按阈值晋升；
+  若上次会话异常退出（关窗口/被杀），下次 `session_start` 会**补一次晋升**
+- **捕获质量护栏**：提问句（`？`/“要不要/怎么/分析下”）与请求句（“我需要你/帮我/加一个”）不捕获；
+  `entity` 只认具体值（IP / URL / 域名 / 路径 / 端口 / UUID），光有“配置/目录/地址”这类泛词不算
 - **manual**：`tool_call` 钩子拦截 `memory_write`，最近一条用户消息里没有触发词就直接 block
 - 模型侧规则另写在 `~/.pi/agent/APPEND_SYSTEM.md`（只维护追加提示词，不改 pi 基础提示）
 

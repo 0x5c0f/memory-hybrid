@@ -12,6 +12,10 @@ export function registerEvents(pi: ExtensionAPI): void {
 	pi.on("session_start", async () => {
 		loadConfig();
 		state.dirty = true;
+		// 兜底：上次会话若异常退出（关窗口/被杀），候选会滞留在 staged —— 这里补一次晋升
+		try {
+			if (getConfig().mode === "auto") promoteCandidates(false);
+		} catch {}
 		ensureSnapshot();
 	});
 

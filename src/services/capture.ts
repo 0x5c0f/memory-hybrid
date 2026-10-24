@@ -7,7 +7,7 @@ import { compileCaptureRules, getConfig } from "../infra/config-store.ts";
 import { getDb } from "../infra/db.ts";
 import { insertRecord } from "../infra/records.ts";
 import { importanceFromScore, matchCandidate } from "../domain/candidates.ts";
-import { looksLikeInstruction, stripTrigger } from "../domain/normalize.ts";
+import { looksLikeInstruction, looksLikeQuestionOrRequest, stripTrigger } from "../domain/normalize.ts";
 import { L0_MAX, L1_MAX } from "../domain/types.ts";
 
 /** 从一条用户消息里提取候选，返回新增条数 */
@@ -23,6 +23,8 @@ export function extractCandidates(sessionId: string, text: string): number {
 	if (/Conversation info \(untrusted metadata\)/.test(trimmed)) return 0;
 	// 提示词/指令本身不是记忆（例：用户让模型"依次调用 memory_search…"）
 	if (looksLikeInstruction(trimmed)) return 0;
+	// 提问/请求也不是记忆（例："要不要把代码放到 src 目录？"）
+	if (looksLikeQuestionOrRequest(trimmed)) return 0;
 
 	const best = matchCandidate(trimmed, compileCaptureRules());
 	if (!best) return 0;

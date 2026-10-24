@@ -28,7 +28,7 @@ export const CONFIG_SCHEMA = 1;
 export const DEFAULT_CONFIG: Config = {
 	mode: "auto",
 	candidateRules: true,
-	promoteThreshold: 0.6,
+	promoteThreshold: 0.45,
 	injectBudgetChars: 600,
 	maxInjectItems: 20,
 	archiveWrite: true,
@@ -38,7 +38,8 @@ export const DEFAULT_CONFIG: Config = {
 		{ pattern: "以后都|以后统一|统一用|一律用|别再|不要再|下次不要", kind: "preference", weight: 0.75, reason: "长期偏好措辞" },
 		{ pattern: "决定|定下来|就这么定|改成|换成|迁移到|升级到", kind: "decision", weight: 0.7, reason: "决策措辞" },
 		{ pattern: "教训|踩坑|坑是|记住|注意以后|别再犯", kind: "lesson", weight: 0.7, reason: "教训措辞" },
-		{ pattern: "配置|端口|路径|目录|账号|地址|域名", kind: "entity", weight: 0.45, reason: "配置/实体信息" },
+		// entity 只认"值特征"（IP/URL/域名/路径/端口/UUID），光有"配置/目录/地址"这种泛词不算
+		{ pattern: "\\b\\d{1,3}(\\.\\d{1,3}){3}\\b|https?://|[a-z0-9][a-z0-9-]*\\.(com|cn|net|io|cc|dev|org)\\b|\/(?:[\\w.-]+\/)+|:\\d{2,5}\\b|[0-9a-f]{8}-[0-9a-f]{4}", kind: "entity", weight: 0.5, reason: "含具体值（IP/URL/域名/路径/端口）" },
 		{ pattern: "待办|todo|下次要|回头要|记得改", kind: "todo", weight: 0.5, reason: "待办措辞" },
 	],
 	triggerPatterns: ["记一下|记下来|记住|记到记忆|存进记忆|存到记忆|写进记忆|帮我记|保存到记忆", "以后都|以后统一|别再|不要再|下次不要"],
@@ -49,7 +50,7 @@ export const DEFAULT_CONFIG: Config = {
 export const CONFIG_HELP: Record<string, string> = {
 	mode: "写入模式。auto=规则型暂存+阈值晋升；manual=只有用户明说（记一下/记住/别再）才写入",
 	candidateRules: "auto 模式下是否用正则捕获候选（纯本地，0 次模型调用）",
-	promoteThreshold: "候选晋升阈值 0~1，越高越保守；captureRules 里的 weight 低于它就不会自动晋升",
+	promoteThreshold: "候选晋升阈值 0~1：captureRules 里 weight 低于它的候选永不自动晋升（默认 0.45，与最低权重对齐）",
 	injectBudgetChars: "L0 注入系统提示的字符上限，越大越费 token（100~4000）",
 	maxInjectItems: "最多注入多少条 L0（1~200）",
 	archiveWrite: "是否同时把记忆写入 Markdown 归档 archive/YYYY-MM-DD.md",

@@ -42,6 +42,21 @@ export function looksLikeInstruction(s: string): boolean {
 	);
 }
 
+/**
+ * 识别「提问/请求」：这类句子是用户让我干活，不是可复用的记忆事实。
+ * 例："分析下，要不要把代码放到 src 目录？" / "我需要你在插件里加个 docs 目录"
+ */
+export function looksLikeQuestionOrRequest(s: string): boolean {
+	const t = s.trim();
+	if (!t) return false;
+	// 以问号结尾（中英文）或是明显疑问词开头
+	if (/[?？]\s*$/.test(t)) return true;
+	if (/^(要不要|是否|能不能|可不可以|怎么|为什么|如何|是不是|有没有|分析下|看一下|帮我看看)/.test(t)) return true;
+	// 直接对我下指令的说法
+	if (/(我需要你|麻烦你|请你|你帮我|你先把|你现在把|给我写|改一下|加一个|增加一个|优化下|重构下)/.test(t)) return true;
+	return false;
+}
+
 /** 去掉"记一下："这类触发前缀，避免污染标题 */
 export function stripTrigger(s: string): string {
 	return s.replace(/^\s*(这个\s*)?(记一下|记住|记下来|帮我记|存一下|保存到记忆)[：:，,\s]*/u, "").trim();

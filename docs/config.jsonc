@@ -21,11 +21,11 @@
   "candidateRules": true,
 
   // ── promoteThreshold ────────────────────────────────────────────
-  // 候选晋升阈值 0~1，越高越保守；captureRules 里的 weight 低于它就不会自动晋升
+  // 候选晋升阈值 0~1：captureRules 里 weight 低于它的候选永不自动晋升（默认 0.45，与最低权重对齐）
   // type=number  range=0 ~ 1
   // 生效点：大于等于该分数的候选才会自动晋升
   // 示例：0.6
-  "promoteThreshold": 0.6,
+  "promoteThreshold": 0.45,
 
   // ── injectBudgetChars ───────────────────────────────────────────
   // L0 注入系统提示的字符上限，越大越费 token（100~4000）
@@ -94,10 +94,10 @@
       "reason": "教训措辞"
     },
     {
-      "pattern": "配置|端口|路径|目录|账号|地址|域名",
+      "pattern": "\\b\\d{1,3}(\\.\\d{1,3}){3}\\b|https?://|[a-z0-9][a-z0-9-]*\\.(com|cn|net|io|cc|dev|org)\\b|/(?:[\\w.-]+/)+|:\\d{2,5}\\b|[0-9a-f]{8}-[0-9a-f]{4}",
       "kind": "entity",
-      "weight": 0.45,
-      "reason": "配置/实体信息"
+      "weight": 0.5,
+      "reason": "含具体值（IP/URL/域名/路径/端口）"
     },
     {
       "pattern": "待办|todo|下次要|回头要|记得改",

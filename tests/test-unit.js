@@ -536,11 +536,33 @@ function check(name, fn) {
 		if (!fs.existsSync(docPath)) return { pass: false, detail: `缺少 ${docPath}，运行 node ops/export-config-doc.js 生成` };
 		// JSONC 解析：剥掉行注释后再 JSON.parse（够用：我们的注释都在独立行或行尾且不含引号字符串）
 		const rawText = fs.readFileSync(docPath, "utf8");
-		const stripped = rawText
-			.split("\n")
-			.filter((l) => !l.trim().startsWith("//"))
-			.map((l) => l.replace(/\s*\/\/.*$/, ""))
-			.join("\n");
+		// 状态机剥注释（不能用「按 // 截断」——字符串里的 https:// 会被切坏）
+		const stripJsonc = (text) => {
+			let out = "";
+			let inStr = false;
+			let esc = false;
+			let inLine = false;
+			let inBlock = false;
+			for (let i = 0; i < text.length; i++) {
+				const c = text[i];
+				const n = text[i + 1];
+				if (inLine) { if (c === "\n") { inLine = false; out += c; } continue; }
+				if (inBlock) { if (c === "*" && n === "/") { inBlock = false; i++; } continue; }
+				if (inStr) {
+					out += c;
+					if (esc) esc = false;
+					else if (c === "\\") esc = true;
+					else if (c === '"') inStr = false;
+					continue;
+				}
+				if (c === '"') { inStr = true; out += c; continue; }
+				if (c === "/" && n === "/") { inLine = true; i++; continue; }
+				if (c === "/" && n === "*") { inBlock = true; i++; continue; }
+				out += c;
+			}
+			return out;
+		};
+		const stripped = stripJsonc(rawText);
 		let doc;
 		try {
 			doc = JSON.parse(stripped);
@@ -594,6 +616,32 @@ function check(name, fn) {
 		const okNew = run("PI_MEMORY_HYBRID_DIR");
 		const okOld = run("PI_MEMCORE_DIR");
 		return { pass: okNew && okOld, detail: `PI_MEMORY_HYBRID_DIR=${okNew} PI_MEMCORE_DIR(兼容)=${okOld}` };
+	});
+
+	check("候选/提问与请求不被捕获", () => {
+		const cases = [
+			"分析下，要不要将代码文件专门放到 src 目录，这样看起来更清爽一点？",
+			"我需要你在插件里面增加一个 docs 目录，用来存储额外文档",
+			"怎么把这段逻辑抽成一个函数？",
+			"能不能把配置改成 0.5？",
+		];
+		const captured = cases.filter((t) => capture.extractCandidates("q", t) > 0);
+		return { pass: captured.length === 0, detail: captured.length ? "被误捕获: " + captured[0].slice(0, 40) : "4 条提问/请求全部跳过" };
+	});
+
+	check("候选/entity 需要具体值特征（泛词不算）", () => {
+		const noValue = "这个目录里的配置文件看起来比较乱";  // 有"目录/配置"泛词，但没有具体值 → 不该被抓（注意别用"以后都"，那是 preference 触发词）
+		const withUrl = "证书走 certd 管理，接口文档 https://example.com/doc/123";  // 注意别含"统一用"等 preference 触发词，否则会按 preference 归类
+		const n1 = capture.extractCandidates("e1", noValue);
+		const n2 = capture.extractCandidates("e2", withUrl);
+		const rows = db().prepare("SELECT kind,score FROM candidates WHERE status='staged'").all();
+		return { pass: n2 === 1 && rows.some((r) => r.kind === "entity" && r.score >= 0.5), detail: `泛词捕获=${n1}（应 0） 含URL捕获=${n2}（应 1）` };
+	});
+
+	check("配置/晋升阈值不高于任何规则权重（否则该类型永不晋升）", () => {
+		const cfg = config.loadConfig();
+		const bad = cfg.captureRules.filter((r) => r.weight < cfg.promoteThreshold).map((r) => `${r.kind}(${r.weight})`);
+		return { pass: bad.length === 0, detail: bad.length ? `这些类型永远到不了阈值 ${cfg.promoteThreshold}: ${bad.join(", ")}` : `阈值 ${cfg.promoteThreshold}，所有规则权重均可达` };
 	});
 	// ---------------------------------------------------------- 汇总
 

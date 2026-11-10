@@ -68,19 +68,52 @@ export function archiveBlock(kind: string, record: ArchiveRecord, hhmm = new Dat
 	return lines.join("\n");
 }
 
+/** 读 meta 表的行号计数；没有返回 null */
+function readArchiveLineCounter(day: string): number | null {
+	const r = getDb().prepare("SELECT v FROM meta WHERE k = ?").get(`archive_lines:${day}`) as { v: string } | undefined;
+	return r ? Number(r.v) : null;
+}
+
+function writeArchiveLineCounter(day: string, n: number): void {
+	getDb().prepare("INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)").run(`archive_lines:${day}`, String(n));
+}
+
+function readFileOrEmpty(file: string): string {
+	try {
+		return fs.readFileSync(file, "utf8");
+	} catch (err: any) {
+		// ENOENT（文件不存在）是正常情况；其它错误（权限/磁盘/路径损坏）必须暴露，不能静默吞掉
+		if (err?.code !== "ENOENT") throw err;
+		return "";
+	}
+}
+
 /** 追加一个块，返回它在文件里的行号区间（供 content_ref 使用） */
 export function appendArchiveFile(day: string, block: string): { startLine: number; endLine: number } {
 	fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
 	const file = path.join(ARCHIVE_DIR, `${day}.md`);
-	let existing = "";
-	try {
-		existing = fs.readFileSync(file, "utf8");
-	} catch {}
-	if (!existing) existing = `# ${day} 记忆归档\n`;
-	const head = existing.replace(/\n*$/, "\n");
-	const startLine = head.split("\n").length;
+
+	// 行号从 meta 表读（首次初始化时读文件算一次）；append 是追加不覆盖，避免多进程互相覆盖
+	let counter = readArchiveLineCounter(day);
+	if (counter === null) {
+		const existing = readFileOrEmpty(file);
+		if (!existing) {
+			// 首次创建：写标题行，下一行号从 2 开始
+			fs.writeFileSync(file, `# ${day} 记忆归档\n`, "utf8");
+			counter = 2;
+		} else {
+			// 文件已存在（可能是旧版生成的、或手动建的）：按当前行数定位下一行号
+			counter = existing.split("\n").length;
+		}
+	}
+
+	const startLine = counter;
 	const endLine = startLine + block.split("\n").length - 2;
-	fs.writeFileSync(file, `${head}${block}`, "utf8");
+
+	// 追加（原子追加，不读回整个文件、不覆盖已有内容）
+	fs.appendFileSync(file, block, "utf8");
+	writeArchiveLineCounter(day, endLine + 1);
+
 	return { startLine, endLine };
 }
 

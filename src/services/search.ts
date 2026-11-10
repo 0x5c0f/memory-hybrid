@@ -21,25 +21,25 @@ export function getVectorBackend(): VectorBackend | null {
 export function searchRecords(query: string, opts: SearchOptions = {}): SearchResult {
 	const d = getDb();
 	expireStale();
-	const limit = opts.limit ?? 8;
-	// status 走白名单，避免把外部字符串直接拼进 SQL
+	const limit = Math.min(Math.max(opts.limit ?? 8, 1), 100); // 夹在 1~100，防超大数据量
+	// status 走白名单（RECORD_STATUSES），'forgotten' 是固定字面量，其余全部参数化
 	const status = RECORD_STATUSES.includes(opts.status as any) ? (opts.status as string) : "active";
-	const statusClause = (alias: string) =>
-		status === "all" ? ` AND ${alias}status != 'forgotten'` : ` AND ${alias}status = '${status}'`;
-	const typeSql = opts.type ? " AND type = ?" : "";
 
 	const ftsQuery = buildFtsQuery(query);
 	let rows: RawHit[] = [];
 	let mode: "fts" | "like" = "fts";
 
 	if (ftsQuery) {
-		// 参数顺序必须与占位符一致：MATCH ? 在前，type = ? 在后
+		// WHERE 条件与参数数组同步构建，消除隐式顺序依赖
+		const conds = ["records_fts MATCH ?"];
+		const params: any[] = [ftsQuery];
+		if (status === "all") conds.push("r.status != 'forgotten'");
+		else { conds.push("r.status = ?"); params.push(status); }
+		if (opts.type) { conds.push("r.type = ?"); params.push(opts.type); }
 		const sql = `SELECT r.id,r.type,r.l0,r.l1,r.content_ref,r.tags,r.importance,r.updated_at,r.last_used_at, (-f.rank) AS rel
 			FROM records_fts f JOIN records r ON r.id = f.id
-			WHERE records_fts MATCH ?${statusClause("r.")}${typeSql.replace("type", "r.type")}
+			WHERE ${conds.join(" AND ")}
 			ORDER BY rel DESC LIMIT ${limit * 3}`;
-		const params: any[] = [ftsQuery];
-		if (opts.type) params.push(opts.type);
 		try {
 			rows = d.prepare(sql).all(...params) as any;
 		} catch {
@@ -52,16 +52,20 @@ export function searchRecords(query: string, opts: SearchOptions = {}): SearchRe
 		const tokens = buildLikeTokens(query);
 		if (!tokens.length) return { hits: [], mode };
 		const clauses = tokens.map(() => "(l0 LIKE ? OR l1 LIKE ? OR IFNULL(raw,'') LIKE ? OR tags LIKE ?)").join(" OR ");
-		const sql = `SELECT id,type,l0,l1,content_ref,tags,importance,updated_at,last_used_at, 0 AS rel
-			FROM records WHERE 1=1${statusClause("")}${typeSql}
-			AND (${clauses})
-			ORDER BY importance DESC, updated_at DESC LIMIT ${limit * 3}`;
+		// 同样用 conditions 数组：status/type 在前，LIKE 占位符在后
+		const conds: string[] = [];
 		const params: any[] = [];
-		if (opts.type) params.push(opts.type); // type 占位符在 LIKE 之前
+		if (status === "all") conds.push("status != 'forgotten'");
+		else { conds.push("status = ?"); params.push(status); }
+		if (opts.type) { conds.push("type = ?"); params.push(opts.type); }
+		conds.push(`(${clauses})`);
 		for (const t of tokens) {
 			const p = `%${t}%`;
 			params.push(p, p, p, p);
 		}
+		const sql = `SELECT id,type,l0,l1,content_ref,tags,importance,updated_at,last_used_at, 0 AS rel
+			FROM records WHERE ${conds.join(" AND ")}
+			ORDER BY importance DESC, updated_at DESC LIMIT ${limit * 3}`;
 		const likeRows = d.prepare(sql).all(...params) as any[];
 		// 多词查询：命中词数越多相关性越高
 		rows = likeRows.map((r) => {

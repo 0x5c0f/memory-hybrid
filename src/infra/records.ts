@@ -36,11 +36,21 @@ export function insertRecord(input: WriteInput, allowDuplicate = false): WriteRe
 	const ttl = input.ttlDays ?? getConfig().ttlDaysByType[input.type];
 	const expires = ttl ? now + ttl * 86400_000 : null;
 
-	d.prepare(
-		"INSERT INTO records (id,type,scope,l0,l1,raw,tags,importance,status,created_at,updated_at,expires_at,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-	).run(id, input.type, "user", l0, l1, raw, tags, input.importance ?? 0.6, "active", now, now, expires, input.source ?? null);
-	d.prepare("INSERT INTO records_fts (id,l0,l1,raw,tags) VALUES (?,?,?,?,?)").run(id, l0, l1, raw ?? "", tags);
+	// records 与 records_fts 必须一起提交：中间崩溃会导致主表有记录、FTS 索引缺失
+	d.exec("BEGIN IMMEDIATE");
+	try {
+		d.prepare(
+			"INSERT INTO records (id,type,scope,l0,l1,raw,tags,importance,status,created_at,updated_at,expires_at,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		).run(id, input.type, "user", l0, l1, raw, tags, input.importance ?? 0.6, "active", now, now, expires, input.source ?? null);
+		d.prepare("INSERT INTO records_fts (id,l0,l1,raw,tags) VALUES (?,?,?,?,?)").run(id, l0, l1, raw ?? "", tags);
+		d.exec("COMMIT");
+	} catch (e) {
+		d.exec("ROLLBACK");
+		throw e;
+	}
 
+	// 归档是文件 IO，无法回滚，放在事务外；若在 appendRecordArchive 与下面的 UPDATE 之间崩溃，
+	// content_ref 会为 null，由 /mem backfill 扫归档自愈（已有崩溃恢复用例覆盖）
 	const contentRef = appendRecordArchive({
 		id,
 		type: input.type,

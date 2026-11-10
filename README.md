@@ -77,7 +77,7 @@ memory-hybrid/
 │   └── state.ts              进程内共享的注入快照状态
 ├── ops/                      运维工具：check.js / export-config-doc.js
 ├── docs/                     文档：config.jsonc / HANDOVER.md / README.md
-└── tests/                    开发资产（pi 不加载）：76 用例 + TEST-PLAN
+└── tests/                    开发资产（pi 不加载）：78 用例 + TEST-PLAN
 ```
 
 > **为什么入口在根、代码在 `src/`**：pi 只发现「根目录文件」与「一层含 `index.ts` 的子目录」，
@@ -272,7 +272,7 @@ db.loadExtension(require('sqlite-vec').getLoadablePath());
 测试脚本在扩展内的 `tests/` 目录。pi **不会**把它当扩展加载（只加载根目录的 `.ts`/`.js` 与含 `index.ts` 的子目录），所以放在项目里不占运行时：
 
 ```powershell
-node .\tests\test-unit.js              # 48 用例，零 API，3 秒
+node .\tests\test-unit.js              # 50 用例，零 API，3 秒
 node .\tests\test-stress.js --count 24 # 15 用例，24 主题 ≈80 条复杂数据
 node .\tests\test-model.js             # 13 用例，每次一个 pi 一次性任务
 ```

@@ -54,11 +54,10 @@ export function stats() {
 	const byStatus = d.prepare("SELECT status, COUNT(*) c FROM records GROUP BY status").all() as any[];
 	const byType = d.prepare("SELECT type, COUNT(*) c FROM records WHERE status='active' GROUP BY type ORDER BY c DESC").all() as any[];
 	const staged = d.prepare("SELECT COUNT(*) c FROM candidates WHERE status='staged'").get() as any;
-	const cfgForStats = getConfig();
-	const eligible = d.prepare("SELECT COUNT(*) c FROM candidates WHERE status='staged' AND score >= ?").get(cfgForStats.promoteThreshold) as any;
 	const recalls = d.prepare("SELECT COUNT(*) c FROM recall_events").get() as any;
 	const fts = d.prepare("SELECT COUNT(*) c FROM records_fts").get() as any;
 	const cfg = getConfig();
+	const eligible = d.prepare("SELECT COUNT(*) c FROM candidates WHERE status='staged' AND score >= ?").get(cfg.promoteThreshold) as any;
 	return {
 		config: cfg,
 		byStatus,

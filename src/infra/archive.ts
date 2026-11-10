@@ -96,13 +96,19 @@ export function appendArchiveFile(day: string, block: string): { startLine: numb
 	// 行号从 meta 表读（首次初始化时读文件算一次）；append 是追加不覆盖，避免多进程互相覆盖
 	let counter = readArchiveLineCounter(day);
 	if (counter === null) {
-		const existing = readFileOrEmpty(file);
+		let existing = readFileOrEmpty(file);
 		if (!existing) {
 			// 首次创建：写标题行，下一行号从 2 开始
 			fs.writeFileSync(file, `# ${day} 记忆归档\n`, "utf8");
 			counter = 2;
 		} else {
-			// 文件已存在（可能是旧版生成的、或手动建的）：按当前行数定位下一行号
+			// 文件已存在（可能是旧版生成的、或手动建的）：若末尾无换行，先补一个，
+			// 否则 append 会把新块粘到最后一行的尾部
+			if (!existing.endsWith("\n")) {
+				fs.appendFileSync(file, "\n", "utf8");
+				existing += "\n";
+			}
+			// 按当前行数定位下一行号
 			counter = existing.split("\n").length;
 		}
 	}

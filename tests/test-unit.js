@@ -658,6 +658,19 @@ function check(name, fn) {
 		return { pass: !!row && row.raw === "旧标记原文" && row.importance === 0.77 && row.tags === "#legacy", detail: JSON.stringify(row ?? null) };
 	});
 
+	check("归档/文件末尾无换行时不粘连（append 前自动补换行）", () => {
+		const day = "2026-01-03";
+		// 手动建一个末尾无换行的文件，并删掉 meta 行号计数，逼它走"读文件算行号"分支
+		fs.writeFileSync(path.join(TEST_DIR, "archive", `${day}.md`), `# ${day} 记忆归档（无结尾换行）`, "utf8");
+		db().prepare("DELETE FROM meta WHERE k = ?").run(`archive_lines:${day}`);
+		const block = ["<!-- memoryhybrid:block -->", "## 09:00 写入 · [lesson] V-NOENL 无换行粘连测试", "摘要", "id: 22222222-3333-4444-5555-666666666666", ""].join("\n");
+		storage.appendArchiveFile(day, block);
+		const txt = fs.readFileSync(path.join(TEST_DIR, "archive", `${day}.md`), "utf8");
+		// 关键：块标记必须单独成行（前面有换行符），不能粘在“（无结尾换行）”后面
+		const ok = txt.includes("（无结尾换行）\n<!-- memoryhybrid:block -->") && !txt.includes("（无结尾换行）<!-- memoryhybrid:block -->");
+		return { pass: ok, detail: ok ? "块标记单独成行，无粘连" : `内容异常: ${JSON.stringify(txt.slice(0, 60))}` };
+	});
+
 	check("配置/两个环境变量都能重定位数据目录", () => {
 		// 用 charCode 拼反斜杠，避免多层转义把路径弄坏
 		const base = "file:///" + EXT.split(String.fromCharCode(92)).join("/");

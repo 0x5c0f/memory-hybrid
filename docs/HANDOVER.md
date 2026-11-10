@@ -37,7 +37,7 @@
 | 依赖 | 仅 Node 内置（`node:sqlite` / `node:crypto` / `node:fs`）+ pi 自带包 |
 | 性能基线 | 2000 条：检索 ~1.4ms（NORMAL）/ 20ms（FULL）；归档改 append 后单写 O(1)（不再读整个文件写回） |
 | 并发 | WAL + `busy_timeout=5000`；records+fts 用 `BEGIN IMMEDIATE` 事务一起提交；归档追加写入不互相覆盖 |
-| 测试 | 76 用例：单元 48 / 压测 15（80+ 条复杂数据）/ 模型层 13，全部在 `tests/` 内 |
+| 测试 | 78 用例：单元 50 / 压测 15（80+ 条复杂数据）/ 模型层 13，全部在 `tests/` 内 |
 
 ### 2.3 测试与运维工具（全部在项目内）
 
@@ -46,7 +46,7 @@ memory-hybrid/
 ├── index.ts                     入口（只转发 src/extension.ts）
 ├── src/                         全部代码（domain/infra/services/interface + extension.ts）
 ├── tests/                       开发资产，pi 不会加载（子目录无 index.ts）
-│   ├── test-unit.js             48 用例，零 API，3 秒
+│   ├── test-unit.js             50 用例，零 API，3 秒
 │   ├── test-stress.js           15 用例，24 主题 × 3 变体 + 边界 ≈80 条数据
 │   ├── test-model.js            13 用例，每例一个 pi 一次性任务
 │   └── TEST-PLAN.md             测试方案（L1/L2 分层说明）
@@ -106,6 +106,8 @@ node ops/export-config-doc.js --check
 | 多条规则同时命中时取**权重最高**的 | 句子可能被归到意料之外的类型（含 URL 的句子若写了"统一用"会被归成 preference） | 权重即优先级；想精确控制就自定义 `captureRules` |
 | 没有关系表 / 向量 | 无法做"相关知识""同义改写"检索 | 见第 5 节，触发条件明确 |
 | 去重是 O(n) 内存扫描 | 每次写入把 active 的 l0 全读出来比归一化键；2000 条约 12ms | 当前量级无感；上万条时应加 `l0_hash` 列 + 唯一索引 |
+| 去重 check-then-insert 非原子 | 多进程并发写同一内容可能重复插入 | 单用户 + manual 模式下概率≈0；真需要时可把去重 SELECT 并入 BEGIN IMMEDIATE 事务 |
+| 重建后 created_at 精确到分钟 | 归档块时间只有时:分，秒数归零 | 秒级偏差不影响排序/新鲜度 |
 
 ---
 

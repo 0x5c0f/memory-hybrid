@@ -6,7 +6,7 @@
  * 改了扩展文件后必须 /reload 才会生效，所以子代理适合"验证行为"，不适合"验证新代码"。
  *
  * 断言全部落在状态上（DB / archive / recall_events），不看模型措辞。
- * 隔离：临时 PI_MEMCORE_DIR，不碰真实 ~/.pi/agent/memory。
+ * 隔离：临时 PI_MEMORY_HYBRID_DIR，不碰真实 ~/.pi/agent/memory。
  *
  * 用法：node ~/.pi/agent/memory/test-model.js [-v]
  */
@@ -21,11 +21,18 @@ const PI = process.env.PI_BIN || path.join(os.homedir(), ".pi", "agent", "bin", 
 const NODE = process.execPath;
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "memh-model-"));
 
+// 模型层测试环境：mode=auto（写入不被 manual 门禁拦）+ candidateRules=true（候选逻辑可用）。
+// 只写这几个键，其余字段由 loadConfig 补默认值。_schema=2 避免触发迁移把 mode 改回 manual。
+fs.writeFileSync(
+	path.join(DIR, "config.json"),
+	JSON.stringify({ _schema: 2, mode: "auto", candidateRules: true }),
+);
+
 function pi(prompt, timeout = 180000) {
 	const r = spawnSync(NODE, [PI, "-p", prompt], {
 		encoding: "utf8",
 		timeout,
-		env: { ...process.env, PI_MEMCORE_DIR: DIR },
+		env: { ...process.env, PI_MEMORY_HYBRID_DIR: DIR },
 	});
 	return `${r.stdout || ""}${r.stderr || ""}`.trim();
 }
@@ -185,7 +192,7 @@ check("重建/清库后从 archive 全量恢复", () => {
 		const rows = d.prepare("SELECT id,type,l0,l1,raw FROM records ORDER BY id").all();
 		process.stdout.write(JSON.stringify({ r, rows }));
 	`;
-	const out = spawnSync(NODE, ["--input-type=module", "-e", script], { encoding: "utf8", env: { ...process.env, PI_MEMCORE_DIR: DIR } });
+	const out = spawnSync(NODE, ["--input-type=module", "-e", script], { encoding: "utf8", env: { ...process.env, PI_MEMORY_HYBRID_DIR: DIR } });
 	let parsed;
 	try {
 		parsed = JSON.parse(out.stdout.trim());

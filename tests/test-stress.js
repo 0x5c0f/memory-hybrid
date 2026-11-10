@@ -2,7 +2,7 @@
 /**
  * test-stress.js — 压测：大量随机复杂数据 + 近似重复 + 重建/检索一致性
  *
- * 隔离：临时 PI_MEMCORE_DIR，不碰真实 ~/.pi/agent/memory。
+ * 隔离：临时 PI_MEMORY_HYBRID_DIR，不碰真实 ~/.pi/agent/memory。
  * 覆盖点：
  *   1) 近似重复：只差标点/空格/emoji/全角 → 应被去重；差一个词 → 应分别保留
  *   2) 边界内容：l0=160 / l1=600 / raw=10KB / CRLF / 代码块 / 全角 / 组合符
@@ -22,7 +22,7 @@ const cIdx = argv.indexOf("--count");
 const TOPIC_COUNT = cIdx >= 0 ? Number(argv[cIdx + 1]) : 12;
 
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "memh-stress-"));
-process.env.PI_MEMCORE_DIR = DIR;
+process.env.PI_MEMORY_HYBRID_DIR = DIR;
 const EXT = `file:///${path.join(os.homedir(), ".pi", "agent", "extensions", "memory-hybrid").replace(/\\/g, "/")}`;
 
 const results = [];
@@ -151,6 +151,9 @@ const check = (name, fn) => {
 	for (const e of edge) w(e, "edge", -2);
 
 	// ---------- 候选与状态操作 ----------
+	// 候选用例需要 auto + candidateRules=true（新默认是 manual + false）
+	config.saveConfig({ mode: "auto", candidateRules: true });
+	config.loadConfig();
 	capture.extractCandidates("stress-1", "决定：以后所有 Python 项目统一用 uv 管理依赖");
 	capture.extractCandidates("stress-2", "你是测试端。请只做一件事：调用 memory_write 写入一条记忆。");
 

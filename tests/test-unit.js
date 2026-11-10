@@ -56,7 +56,7 @@ function check(name, fn) {
 	check("config/首次自动生成文件", () => {
 		config.loadConfig();
 		const raw = JSON.parse(fs.readFileSync(path.join(TEST_DIR, "config.json"), "utf8"));
-		return { pass: raw._schema === 1 && !!raw._help && raw.mode === "auto", detail: `keys=${Object.keys(raw).join(",")}` };
+		return { pass: raw._schema === 2 && !!raw._help && raw.mode === "manual" && raw.candidateRules === false, detail: `mode=${raw.mode} candidateRules=${raw.candidateRules} schema=${raw._schema}` };
 	});
 
 	check("config/clamp 越界", () => {
@@ -78,6 +78,42 @@ function check(name, fn) {
 	});
 
 	// 恢复默认配置给后面的用例
+	try {
+		fs.unlinkSync(path.join(TEST_DIR, "config.json"));
+	} catch {}
+	config.loadConfig();
+
+	check("config/旧 schema 自动迁移到新语义", () => {
+		// 构造一份 schema=1 的旧配置文件（旧默认：auto + candidateRules=true + 阈值 0.6 + entity 泛词规则）
+		const legacy = {
+			_schema: 1,
+			mode: "auto",
+			candidateRules: true,
+			promoteThreshold: 0.6,
+			injectBudgetChars: 600,
+			maxInjectItems: 20,
+			archiveWrite: true,
+			ttlDaysByType: { event: 30, todo: 90, case: 180, pattern: 365 },
+			vector: { backend: "none" },
+			captureRules: [{ pattern: "配置|端口|路径|目录|账号|地址|域名", kind: "entity", weight: 0.45, reason: "配置/实体信息" }],
+			triggerPatterns: ["记一下"],
+			captureMaxChars: 800,
+			sqliteSync: "normal",
+		};
+		fs.writeFileSync(path.join(TEST_DIR, "config.json"), JSON.stringify(legacy), "utf8");
+		const cfg = config.loadConfig();
+		const onDisk = JSON.parse(fs.readFileSync(path.join(TEST_DIR, "config.json"), "utf8"));
+		const entity = cfg.captureRules.find((r) => r.kind === "entity");
+		const pass =
+			cfg.mode === "manual" &&
+			cfg.candidateRules === false &&
+			cfg.promoteThreshold === 0.45 &&
+			onDisk._schema === 2 &&
+			entity && entity.pattern.includes("https"); // 值特征规则含 URL 特征
+		return { pass, detail: `mode=${cfg.mode} cand=${cfg.candidateRules} thr=${cfg.promoteThreshold} schema=${onDisk._schema} entity含URL=${entity ? entity.pattern.includes("https") : false}` };
+	});
+
+	// 迁移用例改过 config.json，恢复默认
 	try {
 		fs.unlinkSync(path.join(TEST_DIR, "config.json"));
 	} catch {}
@@ -186,6 +222,10 @@ function check(name, fn) {
 	});
 
 	// ---------------------------------------------------------- 候选 / 晋升
+
+	// 候选系列需要在 auto + candidateRules=true 下测（新默认是 manual + false）
+	config.saveConfig({ mode: "auto", candidateRules: true });
+	config.loadConfig();
 
 	check("候选/规则命中并暂存", () => {
 		const n = capture.extractCandidates("sess-1", "决定：以后所有 Python 项目统一用 uv 管理依赖");

@@ -4,21 +4,21 @@
 //  可命令修改：/mem config set <key> <value>
 //  带 ★ 的项命令改不了，必须直接编辑 config.json 后 /reload
 {
-  "_schema": 1,
+  "_schema": 2,
 
   // ── mode ────────────────────────────────────────────────────────
-  // 写入模式。auto=规则型暂存+阈值晋升；manual=只有用户明说（记一下/记住/别再）才写入
+  // 写入模式。manual=只有用户明说（记一下/记住/别再）才写入（默认）；auto=额外用正则抓候选
   // type=enum  values=auto|manual
   // 生效点：决定 memory_write 与候选晋升的行为
   // 示例："auto"
-  "mode": "auto",
+  "mode": "manual",
 
   // ── candidateRules ──────────────────────────────────────────────
-  // auto 模式下是否用正则捕获候选（纯本地，0 次模型调用）
+  // auto 模式下是否用正则捕获候选（纯本地，0 次模型调用）。默认 false——真实语料里正则把任务/提问误记为记忆的比例太高
   // type=boolean
   // 生效点：关掉后 auto 模式不再抓候选
   // 示例：true
-  "candidateRules": true,
+  "candidateRules": false,
 
   // ── promoteThreshold ────────────────────────────────────────────
   // 候选晋升阈值 0~1：captureRules 里 weight 低于它的候选永不自动晋升（默认 0.45，与最低权重对齐）

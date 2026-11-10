@@ -7,7 +7,7 @@
 
 ## 1. 一句话定位
 
-给 pi 用的长期记忆扩展：**Markdown 归档（事实源）+ SQLite（可重建索引）双轨**，L0/L1/L2 分层注入，写入默认走"规则型候选 + 阈值晋升"，全程零 npm 依赖、零原生扩展。
+给 pi 用的长期记忆扩展：**Markdown 归档（事实源）+ SQLite（可重建索引）双轨**，L0/L1/L2 分层注入，写入默认走 **manual（只在你说“记一下/记住”时写）**，全程零 npm 依赖、零原生扩展。
 
 ---
 
@@ -22,8 +22,8 @@
 | 读取 `memory_read` | ✅ | 按 id 读全文（含 L2 与归档行号），或按类型列最近 N 条 |
 | 遗忘 `memory_forget` | ✅ | 软删除 + 状态块落归档 |
 | L0 注入 | ✅ | stable 快照，`injectBudgetChars` 硬上限，跨天/写入时刷新 |
-| 候选捕获（auto） | ✅ | 纯正则，0 次模型调用；任务式 prompt 与超长文本被挡 |
-| 写入门禁（manual） | ✅ | `tool_call` 钩子按 `triggerPatterns` 硬拦截 |
+| 候选捕获（auto） | ⚠️ 可选（默认关） | 纯正则，0 次模型调用；实测 precision≈0，只保留给想试的人 |
+| 写入门禁（manual） | ✅ 默认 | `tool_call` 钩子按 `triggerPatterns` 硬拦截 |
 | 归档双轨 | ✅ | 块标记 + raw 段 + 元数据（importance/tags/expires）+ 状态块 |
 | `/mem` 命令 | ✅ | stats/search/stage/mode/config/init/backfill/rebuild |
 | 崩溃自愈 | ✅ | `backfill` 补缺失块 + 修 `content_ref` |
@@ -37,7 +37,7 @@
 | 依赖 | 仅 Node 内置（`node:sqlite` / `node:crypto` / `node:fs`）+ pi 自带包 |
 | 性能基线 | 2000 条：检索 ~1.4ms（NORMAL）/ 20ms（FULL）、单写 ~12ms、200 条批量 ~2.4s |
 | 并发 | WAL + `busy_timeout=5000`；多进程/子代理并发写已验证 |
-| 测试 | 72 用例：单元 44 / 压测 15（80+ 条复杂数据）/ 模型层 13，全部在 `tests/` 内 |
+| 测试 | 76 用例：单元 48 / 压测 15（80+ 条复杂数据）/ 模型层 13，全部在 `tests/` 内 |
 
 ### 2.3 测试与运维工具（全部在项目内）
 
@@ -46,7 +46,7 @@ memory-hybrid/
 ├── index.ts                     入口（只转发 src/extension.ts）
 ├── src/                         全部代码（domain/infra/services/interface + extension.ts）
 ├── tests/                       开发资产，pi 不会加载（子目录无 index.ts）
-│   ├── test-unit.js             44 用例，零 API，3 秒
+│   ├── test-unit.js             48 用例，零 API，3 秒
 │   ├── test-stress.js           15 用例，24 主题 × 3 变体 + 边界 ≈80 条数据
 │   ├── test-model.js            13 用例，每例一个 pi 一次性任务
 │   └── TEST-PLAN.md             测试方案（L1/L2 分层说明）
@@ -101,6 +101,8 @@ node ops/export-config-doc.js --check
 | l0 截断 160 / l1 截断 600 | 超长静默截断 | 常驻注入必须控长 |
 | 只比 l0 去重 | 同 l0 不同 l1 会判重复 | 简化；l1 是摘要不是事实 |
 | 候选是**原话整条**，不是提炼后的结论 | 自动入库的条目读起来像用户的原话 | 纯正则是 0 成本方案的先天上限；要提炼只能上 LLM（与"零调用"目标冲突） |
+| **auto 候选在真实语料下 precision ≈ 0** | 三周 18 条候选/记录全是任务指令和提问，没有一条真记忆 | 已把默认切 manual；auto 只作为可选项保留；LLM 提炼放后期 |
+| **配置迁移靠 `_schema` 版本** | 改了代码默认值后，已存在的 config.json 不会自动更新 | loadConfig 里 migrateConfig 只对旧默认值动手；升版本必须同步写迁移 + 测试 |
 | 多条规则同时命中时取**权重最高**的 | 句子可能被归到意料之外的类型（含 URL 的句子若写了"统一用"会被归成 preference） | 权重即优先级；想精确控制就自定义 `captureRules` |
 | 没有关系表 / 向量 | 无法做"相关知识""同义改写"检索 | 见第 5 节，触发条件明确 |
 | 去重是 O(n) 内存扫描 | 每次写入把 active 的 l0 全读出来比归一化键；2000 条约 12ms | 当前量级无感；上万条时应加 `l0_hash` 列 + 唯一索引 |

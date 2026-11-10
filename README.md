@@ -13,7 +13,7 @@
 |---|---|
 | 跨会话失忆 | 长期记忆落盘，L0 标题注入系统提示 |
 | 注入太贵 | 只注入 L0，硬上限 600 字符（≈150 tok）；L1/L2 按需取 |
-| 记什么、谁来记 | 默认 `auto` 走规则型候选（0 次模型调用）；`manual` 走触发词硬门禁 |
+| 记什么、谁来记 | 默认 `manual`：只有你说“记一下/记住/以后都”才写；`auto` 规则型候选是可选开关（默认关） |
 | 中文搜不到 | FTS5 trigram（≥3 字）+ LIKE 兜底（2 字），实测中文两字词可用 |
 | 数据被锁死 | Markdown 归档是事实源，`index.db` 可随时丢弃重建 |
 | 数据被悄悄弄丢 | 状态变更（遗忘/过期）也落归档；`/mem backfill` 自愈；崩溃恢复有测试 |
@@ -75,7 +75,7 @@ memory-hybrid/
 │   └── state.ts              进程内共享的注入快照状态
 ├── ops/                      运维工具：check.js / export-config-doc.js
 ├── docs/                     文档：config.jsonc / HANDOVER.md / README.md
-└── tests/                    开发资产（pi 不加载）：72 用例 + TEST-PLAN
+└── tests/                    开发资产（pi 不加载）：76 用例 + TEST-PLAN
 ```
 
 > **为什么入口在根、代码在 `src/`**：pi 只发现「根目录文件」与「一层含 `index.ts` 的子目录」，
@@ -168,10 +168,12 @@ id: 0ad7ea41-…
 
 首次加载自动生成，带 `_schema` + `_help` 自解释段。缺键回退默认，越界 clamp，非法正则丢弃。
 
+> **配置迁移**：`_schema` 版本升级时，旧文件里已知的坏默认值（阈值 0.6、entity 泛词规则、`mode=auto`、`candidateRules=true`）会自动迁移到新语义。升级插件后无需手动改配置。
+
 | 键 | 含义 | 默认 |
 |---|---|---|
-| `mode` | `auto`=规则型候选+阈值晋升；`manual`=只有触发词命中才写 | `auto` |
-| `candidateRules` | auto 下是否正则捕获候选（0 次模型调用） | `true` |
+| `mode` | `manual`=只有触发词命中才写（默认）；`auto`=额外用正则抓候选 | `manual` |
+| `candidateRules` | auto 下是否正则捕获候选（默认关——真实语料里正则把任务/提问误记为记忆的比例太高） | `false` |
 | `promoteThreshold` | 候选晋升阈值 0~1（权重低于它的候选永不自动晋升） | `0.45` |
 | `injectBudgetChars` | L0 注入字符上限（100~4000） | `600` |
 | `maxInjectItems` | 最多注入条数（1~200） | `20` |
@@ -236,12 +238,12 @@ db.loadExtension(require('sqlite-vec').getLoadablePath());
 
 ## 写入纪律
 
-- **auto**：`agent_end` 用正则抓候选（0 次模型调用）→ 进 `candidates` → `session_shutdown` 按阈值晋升；
-  若上次会话异常退出（关窗口/被杀），下次 `session_start` 会**补一次晋升**
-- **捕获质量护栏**：提问句（`？`/“要不要/怎么/分析下”）与请求句（“我需要你/帮我/加一个”）不捕获；
-  `entity` 只认具体值（IP / URL / 域名 / 路径 / 端口 / UUID），光有“配置/目录/地址”这类泛词不算
-- **manual**：`tool_call` 钩子拦截 `memory_write`，最近一条用户消息里没有触发词就直接 block
+- **manual（默认）**：`tool_call` 钩子拦截 `memory_write`，最近一条用户消息里没有触发词（“记一下/记住/以后都/别再”）就直接 block。只有你明说才写。
+- **auto（可选，`/mem mode auto` 且 `candidateRules=true`）**：`agent_end` 用正则抓候选（0 次模型调用）→ 进 `candidates` → `session_shutdown` 按阈值晋升；若上次会话异常退出（关窗口/被杀），下次 `session_start` 会**补一次晋升**
+- **捕获质量护栏**（auto 下）：提问句（`？`/“要不要/怎么/分析下”）与请求句（“我需要你/帮我/加一个”）不捕获；`entity` 只认具体值（IP / URL / 域名 / 路径 / 端口 / UUID），光有“配置/目录/地址”这类泛词不算
 - 模型侧规则另写在 `~/.pi/agent/APPEND_SYSTEM.md`（只维护追加提示词，不改 pi 基础提示）
+
+> 真实使用教训：auto 的规则型候选在运维语料下 precision ≈ 0——三周里 18 条候选/记录全是任务指令和提问，没有一条真记忆。所以默认切 manual。LLM 提炼放到后期版本。
 
 ---
 
@@ -268,7 +270,7 @@ db.loadExtension(require('sqlite-vec').getLoadablePath());
 测试脚本在扩展内的 `tests/` 目录。pi **不会**把它当扩展加载（只加载根目录的 `.ts`/`.js` 与含 `index.ts` 的子目录），所以放在项目里不占运行时：
 
 ```powershell
-node .\tests\test-unit.js              # 44 用例，零 API，3 秒
+node .\tests\test-unit.js              # 48 用例，零 API，3 秒
 node .\tests\test-stress.js --count 24 # 15 用例，24 主题 ≈80 条复杂数据
 node .\tests\test-model.js             # 13 用例，每次一个 pi 一次性任务
 ```

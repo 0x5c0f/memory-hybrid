@@ -23,11 +23,11 @@ export interface Config {
 	sqliteSync: "normal" | "full";
 }
 
-export const CONFIG_SCHEMA = 1;
+export const CONFIG_SCHEMA = 2;
 
 export const DEFAULT_CONFIG: Config = {
-	mode: "auto",
-	candidateRules: true,
+	mode: "manual",
+	candidateRules: false,
 	promoteThreshold: 0.45,
 	injectBudgetChars: 600,
 	maxInjectItems: 20,
@@ -48,8 +48,8 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 export const CONFIG_HELP: Record<string, string> = {
-	mode: "写入模式。auto=规则型暂存+阈值晋升；manual=只有用户明说（记一下/记住/别再）才写入",
-	candidateRules: "auto 模式下是否用正则捕获候选（纯本地，0 次模型调用）",
+	mode: "写入模式。manual=只有用户明说（记一下/记住/别再）才写入（默认）；auto=额外用正则抓候选",
+	candidateRules: "auto 模式下是否用正则捕获候选（纯本地，0 次模型调用）。默认 false——真实语料里正则把任务/提问误记为记忆的比例太高",
 	promoteThreshold: "候选晋升阈值 0~1：captureRules 里 weight 低于它的候选永不自动晋升（默认 0.45，与最低权重对齐）",
 	injectBudgetChars: "L0 注入系统提示的字符上限，越大越费 token（100~4000）",
 	maxInjectItems: "最多注入多少条 L0（1~200）",
@@ -103,6 +103,47 @@ function sanitizeTriggerPatterns(input: unknown): string[] {
 	return out.length ? out : DEFAULT_CONFIG.triggerPatterns;
 }
 
+/**
+ * 配置迁移：schema 版本升级时，把旧文件里的已知语义变更强制刷成新语义。
+ * 只对「旧默认值」动手（阈值 0.6、entity 泛词规则、mode=auto、candidateRules=true），
+ * 不碰用户明确改过的值——迁移后 schema 升到 2，之后用户手动设 auto/true 都不会再被覆盖。
+ */
+function migrateConfig(raw: any): { cfg: any; migrated: boolean } {
+	const v = typeof raw._schema === "number" ? raw._schema : 1;
+	const out = { ...raw };
+	let migrated = false;
+	if (v < 2) {
+		// 1) entity 规则：泛词（配置|端口|路径|目录|账号|地址|域名）→ 值特征
+		if (Array.isArray(out.captureRules)) {
+			const idx = out.captureRules.findIndex(
+				(r) => r && r.kind === "entity" && typeof r.pattern === "string" && /配置|端口|路径|目录|账号|地址|域名/.test(r.pattern),
+			);
+			if (idx >= 0) {
+				const entityDefault = DEFAULT_CONFIG.captureRules.find((r) => r.kind === "entity");
+				if (entityDefault) {
+					out.captureRules[idx] = { ...entityDefault };
+					migrated = true;
+				}
+			}
+		}
+		// 2) 阈值：旧默认 0.6 → 0.45（0.6 会让 entity/todo 永不晋升）
+		if (out.promoteThreshold === 0.6) {
+			out.promoteThreshold = 0.45;
+			migrated = true;
+		}
+		// 3) 默认写入门槛：v2 默认 manual（只在用户明说时写）+ 关闭 auto 候选捕获
+		if (out.mode === "auto") {
+			out.mode = "manual";
+			migrated = true;
+		}
+		if (out.candidateRules !== false) {
+			out.candidateRules = false;
+			migrated = true;
+		}
+		out._schema = 2;
+	}
+	return { cfg: out, migrated };
+}
 let cached: Config | null = null;
 
 export function loadConfig(): Config {
@@ -110,6 +151,14 @@ export function loadConfig(): Config {
 	try {
 		raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
 	} catch {}
+	let migrated = false;
+	if (raw) {
+		const m = migrateConfig(raw);
+		if (m.migrated) {
+			raw = m.cfg;
+			migrated = true;
+		}
+	}
 	if (!raw) {
 		const cfg = structuredClone(DEFAULT_CONFIG);
 		try {
@@ -132,13 +181,14 @@ export function loadConfig(): Config {
 		captureMaxChars: Math.round(clamp(raw.captureMaxChars, 100, 8000, DEFAULT_CONFIG.captureMaxChars)),
 		sqliteSync: raw.sqliteSync === "full" ? "full" : "normal",
 	};
-	// 旧版 config.json 缺新键时补写回盘，让文件始终完整可编辑
-	if (
+	// 迁移过或旧版缺新键 → 写回盘，让文件与代码语义一致
+	const needsRewrite =
+		migrated ||
 		!("captureRules" in raw) ||
 		!("triggerPatterns" in raw) ||
 		!("captureMaxChars" in raw) ||
-		!("sqliteSync" in raw)
-	) {
+		!("sqliteSync" in raw);
+	if (needsRewrite) {
 		try {
 			writeConfigFile(cached);
 		} catch {}

@@ -165,7 +165,9 @@ export function backfillArchive(): { appended: number; refsRepaired: number } {
 	let refsRepaired = 0;
 	for (const r of rows) {
 		if (!archived.has(r.id)) {
-			const day = new Date(r.created_at).toISOString().slice(0, 10);
+			// 用本地日期（与写入侧 todayStr() 一致），不能用 toISOString —— 那会得到 UTC 日期，
+			// GMT+8 时区凌晨 0-8 点写入的记录会被回填到前一天的归档文件
+			const day = todayStr(new Date(r.created_at));
 			const { startLine, endLine } = appendArchiveFile(
 				day,
 				archiveBlock(

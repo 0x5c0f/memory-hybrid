@@ -170,7 +170,7 @@ id: 0ad7ea41-…
 
 首次加载自动生成，带 `_schema` + `_help` 自解释段。缺键回退默认，越界 clamp，非法正则丢弃。
 
-> **配置迁移**：`_schema` 版本升级时，旧文件里已知的坏默认值（阈值 0.6、entity 泛词规则、`mode=auto`、`candidateRules=true`）会自动迁移到新语义。升级插件后无需手动改配置。
+> **配置迁移**：`_schema` 版本升级时，旧文件里已知的坏默认值（阈值 0.6、entity 泛词规则、`mode=auto`）会自动迁移到新语义。注意 `candidateRules` **不迁移**——它无法区分「旧默认 true」和「用户手动开的 true」，且 mode 改 manual 后本就不生效。
 
 | 键 | 含义 | 默认 |
 |---|---|---|

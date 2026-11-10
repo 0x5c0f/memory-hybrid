@@ -131,15 +131,13 @@ function migrateConfig(raw: any): { cfg: any; migrated: boolean } {
 			out.promoteThreshold = 0.45;
 			migrated = true;
 		}
-		// 3) 默认写入门槛：v2 默认 manual（只在用户明说时写）+ 关闭 auto 候选捕获
+		// 3) 默认写入门槛：v2 默认 manual（只在用户明说时写）
 		if (out.mode === "auto") {
 			out.mode = "manual";
 			migrated = true;
 		}
-		if (out.candidateRules !== false) {
-			out.candidateRules = false;
-			migrated = true;
-		}
+		// 注意：candidateRules **不迁移**——它无法区分「v1 默认 true」和「用户手动开的 true」，
+		// 强制改成 false 会误伤明确想用 auto 候选的用户；且 mode 改 manual 后它本就不生效。
 		out._schema = 2;
 	}
 	return { cfg: out, migrated };

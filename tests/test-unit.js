@@ -106,7 +106,7 @@ function check(name, fn) {
 		const entity = cfg.captureRules.find((r) => r.kind === "entity");
 		const pass =
 			cfg.mode === "manual" &&
-			cfg.candidateRules === false &&
+			cfg.candidateRules === true && // candidateRules 不迁移（无法区分默认 true 与手动 true）
 			cfg.promoteThreshold === 0.45 &&
 			onDisk._schema === 2 &&
 			entity && entity.pattern.includes("https"); // 值特征规则含 URL 特征
@@ -528,6 +528,22 @@ function check(name, fn) {
 		storage.rebuildFromArchive();
 		const back = db().prepare("SELECT l0 FROM records WHERE id=?").get(r.id);
 		return { pass: bf.appended >= 1 && !!back && back.l0.includes("V-CRASH2"), detail: `appended=${bf.appended} 重建后存在=${!!back}` };
+	});
+
+	check("归档/backfill 用本地日期（GMT+8 凌晨不归错天）", () => {
+		// 直接插一条 created_at = 本地凌晨的记录，绕过 insertRecord（不写归档）→ 模拟"崩溃在 append 前"
+		const id = "99999999-aaaa-bbbb-cccc-dddddddddddd";
+		const localDawn = new Date(2026, 10, 11, 1, 30, 0).getTime(); // 本地 2026-11-11 01:30（UTC 是 11-10）
+		db().prepare(
+			"INSERT INTO records (id,type,scope,l0,l1,raw,tags,importance,status,created_at,updated_at,expires_at,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		).run(id, "entity", "user", "V-TZ 时区测试记录", "摘要", null, "#entity", 0.6, "active", localDawn, localDawn, null, "test");
+		const bf = storage.backfillArchive();
+		// 关键断言：回填的 content_ref 应指向本地日期 2026-11-11.md（旧代码会指向 UTC 的 2026-11-10.md）
+		const ref = db().prepare("SELECT content_ref FROM records WHERE id=?").get(id)?.content_ref;
+		const ok = bf.appended === 1 && !!ref && ref.startsWith("archive/2026-11-11.md");
+		// 清理这条，避免影响后续用例
+		db().prepare("DELETE FROM records WHERE id=?").run(id);
+		return { pass: ok, detail: `回填=${bf.appended} content_ref=${ref}（应指向 archive/2026-11-11.md）` };
 	});
 
 	check("归档/importance+tags+TTL 往返（事实源完整性）", () => {

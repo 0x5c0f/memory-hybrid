@@ -1,5 +1,7 @@
 # memory-hybrid
 
+> 仓库：<https://github.com/0x5c0f/memory-hybrid>
+
 给 **pi** 用的长期记忆扩展：双轨存储（SQLite + Markdown）、L0/L1/L2 分层、规则型候选捕获。
 默认纯 **SQLite（Node 内置 `node:sqlite`）+ Markdown**，零 npm 依赖、零原生扩展；向量后端（含 `sqlite-vec`）作为**可选**预留。
 
@@ -282,9 +284,14 @@ node .\tests\test-model.js             # 13 用例，每次一个 pi 一次性�
 自用不需要安装步骤（放进 `extensions/` 即生效）。要跨机器分发时：
 
 ```powershell
-pi install ./memory-hybrid            # 本地目录
-pi install git:github.com/<user>/memory-hybrid   # git 源
+# 克隆到本地，再拷到 ~/.pi/agent/extensions/
+git clone https://github.com/0x5c0f/memory-hybrid.git
+
+# 或 pi 直接安装（URL 源会当 git 源处理）
+pi install https://github.com/0x5c0f/memory-hybrid
 ```
+
+仓库：<https://github.com/0x5c0f/memory-hybrid>
 
 ---
 

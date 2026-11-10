@@ -155,7 +155,7 @@ node ops/export-config-doc.js --check
 2. **`scope`（项目/用户作用域）你需不需要？** 如果你只在个人机器上用、不区分项目，就直接砍掉这个方向。
 3. **向量检索的真实痛点在哪？** 你希望"答得更准"，还是"换个说法也能搜到"？前者靠更大的模型，后者才需要向量。
 4. **P2 里有没有你现在就想要的？**（导出/导入、按月归档、`links` 埋点）
-5. **这个扩展要不要包成 pi package 做版本管理**（方便跨机器 `pi install`）？还是继续"拷目录"？
+5. ~~这个扩展要不要包成 pi package 做版本管理~~ → **已决定**：建了 GitHub 仓库，用 git 分发（`pi install https://github.com/0x5c0f/memory-hybrid`），不单独发 npm 包。
 
 ---
 

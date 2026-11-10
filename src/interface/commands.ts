@@ -47,7 +47,19 @@ export function registerCommands(pi: ExtensionAPI): void {
 				const m = rest[0];
 				if (m !== "auto" && m !== "manual") return out("用法：/mem mode auto|manual");
 				saveConfig({ mode: m });
-				return out(`模式已切换为 ${m}（写入 ${CONFIG_PATH}）`);
+				const cfg = getConfig();
+				if (m === "auto") {
+					if (cfg.candidateRules) {
+						return out(`已切到 auto，候选捕获（candidateRules=true）已开：正则抓候选 → 按阈值 ${cfg.promoteThreshold} 晋升`);
+					}
+					return out(
+						[
+							"已切到 auto（不再用触发词门禁），但候选捕获 candidateRules 还是 false —— 此时不会自动抓候选，只是模型可自主决定是否写入。",
+							"要开自动候选捕获：/mem config set candidateRules true",
+						].join("\n"),
+					);
+				}
+				return out("已切到 manual（默认）：只有触发词（记一下/记住/以后都/别再）命中才允许写入，其余一律拦截");
 			}
 
 			if (cmd === "config") {
